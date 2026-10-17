@@ -3,11 +3,19 @@
 # run file with bash and stop script is any commands fail
 set -euo pipefail
 
+# run from the script's own directory so relative paths work from anywhere
+cd "$(dirname "$0")"
+
 # clone OpenBao
-git clone https://github.com/openbao/openbao.git
+if [ -e "openbao" ]; then
+   cd openbao
+   git pull
+else
+   git clone https://github.com/openbao/openbao.git
+   cd openbao
+fi
 
 # build OpenBao
-cd openbao
 make dev    # compiles code and puts bao binary into openbao/bin/
 cd ..
 BAO=./openbao/bin/bao   # save path for later ease
@@ -15,6 +23,7 @@ BAO=./openbao/bin/bao   # save path for later ease
 # start a dev-mode server
 $BAO server -dev -dev-root-token-id=root &  # runs server in background
 SERVER_PID=$! # save server's process ID
+trap 'kill "$SERVER_PID" 2>/dev/null' EXIT # stop server on exit, even if a command fails
 sleep 3
 export BAO_ADDR=http://127.0.0.1:8200
 export BAO_TOKEN=root
@@ -60,6 +69,3 @@ USER_TOKEN=$($BAO login -method=userpass -no-store -field=token \
 # request a certificate
 BAO_TOKEN=$USER_TOKEN $BAO write pki/issue/example-dot-com \
     common_name="test.example.com" ttl=24h
-
-# kill server process ID to stop background server
-kill %1
